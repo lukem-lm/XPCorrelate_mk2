@@ -1,0 +1,75 @@
+function [C, XC, YC] = f_loadEPMA(epmaname, filepath, epmabsename)
+% f_loadEPMA Loads EPMA data from a PNG or TIFF file.
+% input:
+%   epmaname     - Name of the EPMA file (e.g., 'EDS_Cr.tiff').
+%   filepath     - Path to the directory containing the EPMA file.
+%   epmabsename  - Name of the BSE file (optional, for TIFF files).
+% outputs:
+%   C            - EPMA data (2D or 3D matrix).
+%   XC           - X coordinates for the EPMA data.
+%   YC           - Y coordinates for the EPMA data.
+[~, ~, ext] = fileparts(epmaname);
+
+% Load the EPMA file
+if strcmpi(ext, '.png')
+    % Load PNG file
+    [C, map] = imread(fullfile(filepath, epmaname), 'png');
+    if ~isempty(map)
+        C = ind2rgb(C, map); 
+    end
+    C = mean(C, 3); 
+    C = double(C);  
+    C = rot90(C, 2); 
+
+    % Generate XC and YC coordinates
+    xC = 1:size(C, 2); % X coordinates (columns)
+    yC = 1:size(C, 1); % Y coordinates (rows)
+    [XC, YC] = ndgrid(xC, yC);
+
+    % Smooth data
+    C = smoothdata(C, 2, 'gaussian', 2);
+    C = smoothdata(C, 1, 'gaussian', 2);
+
+elseif strcmpi(ext, '.tiff') || strcmpi(ext, '.tif')
+    % Load TIFF file
+    C = imread(fullfile(filepath, epmaname), 'tiff');
+    C = double(C); 
+
+    % Display channel information
+    disp('TIFF file loaded successfully.');
+    num_channels = size(C, 3);
+    disp(['Number of channels: ', num2str(num_channels)]);
+    
+    for i = 1:num_channels
+        channel_data = C(:, :, i);
+        disp(['Channel ', num2str(i), ' - Min: ', num2str(min(channel_data(:))), ...
+              ', Max: ', num2str(max(channel_data(:))), ...
+              ', Mean: ', num2str(mean(channel_data(:)))]);
+    end
+
+    % Load BSE image if available
+    if nargin > 2 && ~isempty(epmabsename)
+        try
+            BSEC = imread(fullfile(filepath, epmabsename), 'tiff');
+            BSEC = double(BSEC); 
+            C = cat(3, C, BSEC); 
+            disp('BSE image loaded and concatenated.');
+        catch
+            warning('BSE image could not be loaded.');
+        end
+    end
+
+    % Generate XC and YC coordinates,
+    xC = 1:size(C, 1); % X coordinates (columns)
+    yC = 1:size(C, 2); % Y coordinates (rows)
+    [XC, YC] = ndgrid(xC, yC); 
+
+else
+    error('Unsupported file format. Expected .png or .tiff.');
+end
+
+% Display final data information
+disp('Final data information:');
+disp(['Size of C: ', num2str(size(C))]);
+disp(['Min and Max of C: ', num2str(min(C(:))), ', ', num2str(max(C(:)))]);
+end
